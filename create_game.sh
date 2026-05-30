@@ -52,4 +52,47 @@ cat > GamePackage/play.sh << 'EOF'
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-RE
+RELAY_IP="34.20.157.190"
+
+echo ""
+echo "================================"
+echo "  Ye vs Netanyahu"
+echo "================================"
+echo ""
+echo "How do you want to play?"
+echo "  1) Local  (both players on this machine)"
+echo "  2) Online (via relay server)"
+echo ""
+read -p "Enter 1 or 2: " mode
+
+if [ "$mode" = "1" ]; then
+    ./game local
+
+else
+    echo ""
+    echo "Are you hosting or joining?"
+    echo "  1) Host"
+    echo "  2) Join"
+    echo ""
+    read -p "Enter 1 or 2: " choice
+
+    if [ "$choice" = "1" ]; then
+        ./game host "$RELAY_IP"
+    else
+        ./game join "$RELAY_IP"
+    fi
+fi
+EOF
+
+chmod +x GamePackage/install.sh GamePackage/play.sh
+
+# Zip it up
+zip -r GamePackage.zip GamePackage/
+rm -rf GamePackage
+
+echo ""
+echo "Done! GamePackage.zip is ready to send."
+echo "Your friend should:"
+echo "  1. Unzip it"
+echo "  2. Run install.sh once"
+echo "  3. Run play.sh to play"
