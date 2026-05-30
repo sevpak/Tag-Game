@@ -3,3 +3,5 @@ GamePackage/
 GamePackage.zip
 *.o
 *.dylib
+build/
+server/

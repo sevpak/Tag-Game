@@ -3,12 +3,15 @@ set -e
 
 echo "Building game..."
 
-# Compile all source files
-g++ main.cpp player.cpp network.cpp ui.cpp -o game \
-  -std=c++17 \
-  -I/opt/homebrew/include \
-  -L/opt/homebrew/lib \
-  -lsfml-graphics -lsfml-window -lsfml-system -lsfml-network
+# Create and enter build directory
+mkdir -p build
+cd build
+
+# Run CMake and build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+make
+
+cd ..
 
 echo "Creating package..."
 
@@ -17,8 +20,8 @@ rm -rf GamePackage
 mkdir -p GamePackage/libs
 
 # Copy binary and assets
-cp game               GamePackage/
-cp -r assets/         GamePackage/assets/
+cp build/game          GamePackage/
+cp -r assets/          GamePackage/assets/
 cp /System/Library/Fonts/Helvetica.ttc GamePackage/
 
 # Copy SFML dylibs
@@ -49,45 +52,4 @@ cat > GamePackage/play.sh << 'EOF'
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-RELAY_IP="34.20.157.190"   # hardcode this
-
-echo ""
-echo "================================"
-echo "  Ye vs Netanyahu"
-echo "================================"
-echo ""
-echo "How do you want to play?"
-echo "  1) Local  (both players on this machine)"
-echo "  2) Online (via relay server)"
-echo ""
-read -p "Enter 1 or 2: " mode
-
-if [ "$mode" = "1" ]; then
-    ./game local
-else
-    echo ""
-    echo "Are you host or joiner?"
-    echo "  1) Host"
-    echo "  2) Join"
-    read -p "Enter 1 or 2: " choice
-
-    if [ "$choice" = "1" ]; then
-        ./game host "$RELAY_IP"
-    else
-        ./game join "$RELAY_IP"
-    fi
-fi
-EOF
-
-chmod +x GamePackage/install.sh GamePackage/play.sh
-
-# Zip it up
-zip -r GamePackage.zip GamePackage/
-rm -rf GamePackage
-
-echo ""
-echo "Done! GamePackage.zip is ready to send."
-echo "Your friend should:"
-echo "  1. Unzip it"
-echo "  2. Run install.sh once"
-echo "  3. Run play.sh to play"
+RE
