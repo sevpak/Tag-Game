@@ -3,12 +3,11 @@ set -e
 
 echo "Building game..."
 
-# Create and enter build directory
 mkdir -p build
 cd build
 
-# Run CMake and build
-cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake .. -DCMAKE_BUILD_TYPE=Release \
+         -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
 make
 
 cd ..
@@ -42,7 +41,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 echo "Registering game with firewall (needs your password)..."
 sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add "$SCRIPT_DIR/game"
 sudo /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp "$SCRIPT_DIR/game"
-xattr -cr "$SCRIPT_DIR"
+sudo xattr -cr "$SCRIPT_DIR"
 echo "Done! Run play.sh to launch."
 EOF
 
