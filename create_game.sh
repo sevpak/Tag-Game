@@ -6,8 +6,7 @@ echo "Building game..."
 mkdir -p build
 cd build
 
-cmake .. -DCMAKE_BUILD_TYPE=Release \
-         -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+cmake .. -DCMAKE_BUILD_TYPE=Release
 make
 
 cd ..
