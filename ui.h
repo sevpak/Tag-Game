@@ -6,6 +6,8 @@ class UI {
 public:
     UI(float W, float H);
 
+    sf::Text& getStartText();
+
     void resetTimer();
     void updateTimer(float elapsed);
     void showGameOver(const std::string& message);

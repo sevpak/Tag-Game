@@ -70,3 +70,11 @@ void UI::draw(sf::RenderWindow& window, bool roundStarted, bool gameOver) {
     if (!roundStarted && !gameOver)
         window.draw(startText);
 }
+
+sf::Text& UI::getStartText() {
+    startText.setString("Waiting for other player...");
+    sf::FloatRect sb = startText.getLocalBounds();
+    startText.setOrigin({sb.size.x / 2.f, sb.size.y / 2.f});
+    startText.setPosition({W / 2.f, H / 2.f});
+    return startText;
+}

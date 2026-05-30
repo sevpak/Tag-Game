@@ -31,6 +31,16 @@ int main(int argc, char* argv[]) {
         sf::Texture texture1("assets/hider.png");
         sf::Texture texture2("assets/seeker.png");
 
+        sf::Font  font("/System/Library/Fonts/Helvetica.ttc");
+        sf::Text  countdownText(font, "", 96);
+        countdownText.setFillColor(sf::Color::White);
+
+        auto centerText = [&](sf::Text& t) {
+            sf::FloatRect b = t.getLocalBounds();
+            t.setOrigin({b.size.x / 2.f, b.size.y / 2.f});
+            t.setPosition({W / 2.f, H / 2.f - 60.f});
+        };
+
         Player me   ((isHost || isLocal) ? texture1 : texture2, (isHost || isLocal) ? 0.08f : 0.18f);
         Player them ((isHost || isLocal) ? texture2 : texture1, (isHost || isLocal) ? 0.18f : 0.08f);
 
@@ -38,8 +48,9 @@ int main(int argc, char* argv[]) {
 
         sf::Clock clock;
         float elapsedTime  = 0.f;
-        bool  roundStarted = false;
-        bool  gameOver     = false;
+        GamePhase phase       = GamePhase::Waiting;
+        float     phaseTimer  = 0.f;
+        bool      peerReady   = false; 
 
         const float minX = BORDER, minY = BORDER;
         const float maxX = W - BORDER, maxY = H - BORDER;
@@ -53,8 +64,9 @@ int main(int argc, char* argv[]) {
                                                 : sf::Vector2f{minX, minY});
             me.alive      = true;
             them.alive    = true;
-            roundStarted  = false;
-            gameOver      = false;
+            phase           = GamePhase::Waiting;
+            phaseTimer      = 0.f;
+            peerReady       = false;
             elapsedTime   = 0.f;
             ui.resetTimer();
         };
@@ -69,7 +81,20 @@ int main(int argc, char* argv[]) {
                 GameState received{};
                 if (net.receive(received)) {
                     theirTargetPos = {received.x, received.y};
-                    them.alive = received.alive;
+                    them.alive     = received.alive;
+
+                    if (!isHost) {
+                        // joiner just follows host's phase
+                        phase           = received.phase;
+                        uint8_t cd      = received.countdown;
+                        if (phase == GamePhase::Countdown) {
+                            countdownText.setString(std::to_string(cd));
+                            centerText(countdownText);
+                        }
+                    } else {
+                        // host just seeing a packet means peer is connected
+                        peerReady = true;
+                    }
                 }
                 sf::Vector2f current = them.getPosition();
                 sf::Vector2f delta   = theirTargetPos - current;
@@ -91,14 +116,34 @@ int main(int argc, char* argv[]) {
                             window.create(sf::VideoMode({1280, 720}), "Ye vs Netanyahu");
                         window.setFramerateLimit(60);
                     }
-                    else if (!roundStarted && !gameOver) roundStarted = true;
                 }
             }
 
             float dt = clock.restart().asSeconds();
 
+            // --- Phase logic (host drives, joiner follows) ---
+            if (isHost || isLocal) {
+                if (phase == GamePhase::Waiting && (peerReady || isLocal)) {
+                    phase      = GamePhase::Countdown;
+                    phaseTimer = 3.f;
+                    countdownText.setString("3");
+                    centerText(countdownText);
+                }
+
+                if (phase == GamePhase::Countdown) {
+                    phaseTimer -= dt;
+                    uint8_t cd = (uint8_t)std::ceil(phaseTimer);
+                    countdownText.setString(std::to_string(cd));
+                    centerText(countdownText);
+                    if (phaseTimer <= 0.f) {
+                        phase = GamePhase::Playing;
+                        countdownText.setString("");
+                    }
+                }
+            }
+
             // --- Update ---
-            if (roundStarted && !gameOver) {
+            if (phase == GamePhase::Playing) {
                 me.handleInput(SPEED1, dt);
                 me.clamp(minX, minY, maxX, maxY);
 
@@ -112,24 +157,25 @@ int main(int argc, char* argv[]) {
                     ui.updateTimer(elapsedTime);
                 }
 
-                // Collision
                 if (me.alive && me.getBounds().findIntersection(them.getBounds())) {
                     if (isHost || isLocal) {
                         me.alive = false;
-                        gameOver = true;
+                        phase    = GamePhase::GameOver;
                         ui.showGameOver(isLocal ? "Netanyahu got Ye!\nPress R to restart"
                                                 : "Game Over! Netanyahu got you!\nPress R to restart");
                     }
                 }
                 if (!isLocal && !isHost && !them.alive) {
-                    gameOver = true;
+                    phase = GamePhase::GameOver;
                     ui.showGameOver("You caught him!\nPress R to restart");
                 }
             }
 
             // --- Network send ---
             if (!isLocal) {
-                net.send({me.getPosition().x, me.getPosition().y, me.alive});
+                uint8_t cd = (phase == GamePhase::Countdown) 
+                            ? (uint8_t)std::ceil(phaseTimer) : 0;
+                net.send({me.getPosition().x, me.getPosition().y, me.alive, phase, cd});
             }
 
             // --- Draw ---
@@ -137,7 +183,13 @@ int main(int argc, char* argv[]) {
             ui.drawBorder(window);
             if (me.alive)   me.draw(window);
             if (them.alive) them.draw(window);
-            ui.draw(window, roundStarted, gameOver);
+            ui.draw(window, phase == GamePhase::Playing, phase == GamePhase::GameOver);
+
+            if (phase == GamePhase::Waiting)
+                window.draw(ui.getStartText()); // waiting for other player
+            if (phase == GamePhase::Countdown)
+                window.draw(countdownText);
+
             window.setTitle("Ye vs Netanyahu | FPS: " + std::to_string((int)(1.f / dt)));
             window.display();
         }
