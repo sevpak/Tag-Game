@@ -1,0 +1,5 @@
+game
+GamePackage/
+GamePackage.zip
+*.o
+*.dylib
