@@ -13,8 +13,9 @@ enum class GamePhase : uint8_t {
 #pragma pack(push, 1)
 struct GameState {
     float   x, y;
-    uint8_t alive;      // use uint8_t instead of bool
-    uint8_t phase;      // use uint8_t instead of GamePhase enum
+    float   timestamp;  // when this packet was sent
+    uint8_t alive;
+    uint8_t phase;
     uint8_t countdown;
 };
 #pragma pack(pop)

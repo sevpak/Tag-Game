@@ -2,6 +2,7 @@
 #include <SFML/Network.hpp>
 #include <iostream>
 #include <string>
+#include <vector>
 #include "constants.h"
 #include "player.h"
 #include "network.h"
@@ -56,11 +57,20 @@ int main(int argc, char* argv[]) {
 
         sf::Clock clock;
         float     elapsedTime = 0.f;
+        float     gameTime    = 0.f;
         GamePhase phase       = GamePhase::Waiting;
         float     phaseTimer  = 0.f;
         bool      peerReady   = false;
 
-        // Game world bounds (fixed regardless of screen size)
+        // Position history for lag compensation
+        struct PositionSnapshot {
+            sf::Vector2f gamePos;
+            float        timestamp;
+        };
+        std::vector<PositionSnapshot> myHistory;
+        myHistory.reserve(120);
+
+        // Game world bounds
         const float gameMinX = BORDER * (GAME_W / 1920.f);
         const float gameMinY = BORDER * (GAME_H / 1080.f);
         const float gameMaxX = GAME_W - gameMinX;
@@ -84,6 +94,8 @@ int main(int argc, char* argv[]) {
             phaseTimer  = 0.f;
             peerReady   = false;
             elapsedTime = 0.f;
+            gameTime    = 0.f;
+            myHistory.clear();
             ui.resetTimer();
         };
 
@@ -97,28 +109,49 @@ int main(int argc, char* argv[]) {
             if (!isLocal) {
                 GameState received{};
                 if (net.receive(received)) {
-                    // received coords are in game world — convert to this screen
                     theirTargetPos = toScreen({received.x, received.y});
                     them.alive     = (bool)received.alive;
 
+                    // Lag compensated collision — host only
+                    if ((isHost) && phase == GamePhase::Playing && me.alive) {
+                        float theirTime = received.timestamp;
+
+                        // Find where we were when their packet was sent
+                        sf::Vector2f myPastGamePos = toGame(me.getPosition());
+                        for (int i = (int)myHistory.size() - 1; i >= 0; i--) {
+                            if (myHistory[i].timestamp <= theirTime) {
+                                myPastGamePos = myHistory[i].gamePos;
+                                break;
+                            }
+                        }
+
+                        // Check collision at past position
+                        sf::FloatRect myPastBounds   = me.getBounds();
+                        myPastBounds.position        = toScreen(myPastGamePos);
+                        sf::FloatRect theirBounds    = them.getBounds();
+                        theirBounds.position         = toScreen({received.x, received.y});
+
+                        if (myPastBounds.findIntersection(theirBounds)) {
+                            me.alive = false;
+                            phase    = GamePhase::GameOver;
+                            ui.showGameOver("Game Over! Netanyahu got you!\nPress R to restart");
+                        }
+                    }
+
                     if (!isHost) {
                         GamePhase newPhase = (GamePhase)received.phase;
-
                         if (newPhase == GamePhase::GameOver && phase != GamePhase::GameOver) {
                             phase = GamePhase::GameOver;
                             ui.showGameOver("You caught him!\nPress R to restart");
                         } else {
                             phase = newPhase;
                         }
-
                         if (phase == GamePhase::Countdown) {
-                            uint8_t cd = received.countdown;
-                            countdownText.setString(std::to_string(cd));
+                            countdownText.setString(std::to_string(received.countdown));
                             centerText(countdownText);
                         }
-                        if (phase == GamePhase::Playing) {
+                        if (phase == GamePhase::Playing)
                             countdownText.setString("");
-                        }
                     } else {
                         peerReady = true;
                     }
@@ -173,6 +206,12 @@ int main(int argc, char* argv[]) {
                 me.handleInput(SPEED1, dt);
                 me.clamp(minX, minY, maxX, maxY);
 
+                // Record position history for lag compensation
+                gameTime += dt;
+                myHistory.push_back({toGame(me.getPosition()), gameTime});
+                if (myHistory.size() > 120)
+                    myHistory.erase(myHistory.begin());
+
                 if (isLocal) {
                     them.handleInputP2(SPEED2, dt);
                     them.clamp(minX, minY, maxX, maxY);
@@ -183,23 +222,20 @@ int main(int argc, char* argv[]) {
                     ui.updateTimer(elapsedTime);
                 }
 
-                // Collision — host decides, sends GameOver phase to joiner
-                if (me.alive && me.getBounds().findIntersection(them.getBounds())) {
-                    if (isHost || isLocal) {
-                        me.alive = false;
-                        phase    = GamePhase::GameOver;
-                        ui.showGameOver(isLocal ? "Netanyahu got Ye!\nPress R to restart"
-                                                : "Game Over! Netanyahu got you!\nPress R to restart");
-                    }
+                // Local collision (for local mode only)
+                if (isLocal && me.alive && me.getBounds().findIntersection(them.getBounds())) {
+                    me.alive = false;
+                    phase    = GamePhase::GameOver;
+                    ui.showGameOver("Netanyahu got Ye!\nPress R to restart");
                 }
             }
 
-            // --- Network send — always send in game world coords ---
+            // --- Network send ---
             if (!isLocal) {
                 sf::Vector2f gamePos = toGame(me.getPosition());
                 uint8_t cd = (phase == GamePhase::Countdown)
                              ? (uint8_t)std::ceil(phaseTimer) : 0;
-                net.send({gamePos.x, gamePos.y,
+                net.send({gamePos.x, gamePos.y, gameTime,
                           (uint8_t)me.alive, (uint8_t)phase, cd});
             }
 
