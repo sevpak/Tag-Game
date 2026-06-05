@@ -23,6 +23,14 @@ int main(int argc, char* argv[]) {
     float W = static_cast<float>(desktop.size.x);
     float H = static_cast<float>(desktop.size.y);
 
+    // --- Coordinate conversion ---
+    auto toScreen = [&](sf::Vector2f gamePos) -> sf::Vector2f {
+        return {gamePos.x * (W / GAME_W), gamePos.y * (H / GAME_H)};
+    };
+    auto toGame = [&](sf::Vector2f screenPos) -> sf::Vector2f {
+        return {screenPos.x * (GAME_W / W), screenPos.y * (GAME_H / H)};
+    };
+
     // --- Network ---
     Network net(isHost, isLocal, serverIP);
 
@@ -52,16 +60,24 @@ int main(int argc, char* argv[]) {
         float     phaseTimer  = 0.f;
         bool      peerReady   = false;
 
+        // Game world bounds (fixed regardless of screen size)
+        const float gameMinX = BORDER * (GAME_W / 1920.f);
+        const float gameMinY = BORDER * (GAME_H / 1080.f);
+        const float gameMaxX = GAME_W - gameMinX;
+        const float gameMaxY = GAME_H - gameMinY;
+
+        // Screen bounds for clamping
         const float minX = BORDER, minY = BORDER;
         const float maxX = W - BORDER, maxY = H - BORDER;
 
         auto reset = [&]() {
-            me.setPosition  ((isHost || isLocal) ? sf::Vector2f{minX, minY}
-                                                : sf::Vector2f{maxX - them.getBounds().size.x,
-                                                               maxY - them.getBounds().size.y});
-            them.setPosition((isHost || isLocal) ? sf::Vector2f{maxX - them.getBounds().size.x,
-                                                               maxY - them.getBounds().size.y}
-                                                : sf::Vector2f{minX, minY});
+            sf::Vector2f theirGameSize = toGame(them.getBounds().size);
+            me.setPosition  ((isHost || isLocal)
+                ? toScreen({gameMinX, gameMinY})
+                : toScreen({gameMaxX - theirGameSize.x, gameMaxY - theirGameSize.y}));
+            them.setPosition((isHost || isLocal)
+                ? toScreen({gameMaxX - theirGameSize.x, gameMaxY - theirGameSize.y})
+                : toScreen({gameMinX, gameMinY}));
             me.alive    = true;
             them.alive  = true;
             phase       = GamePhase::Waiting;
@@ -81,11 +97,20 @@ int main(int argc, char* argv[]) {
             if (!isLocal) {
                 GameState received{};
                 if (net.receive(received)) {
-                    theirTargetPos = {received.x, received.y};
-                    them.alive     = (bool)received.alive;  // cast uint8_t to bool
+                    // received coords are in game world — convert to this screen
+                    theirTargetPos = toScreen({received.x, received.y});
+                    them.alive     = (bool)received.alive;
 
                     if (!isHost) {
-                        phase = (GamePhase)received.phase;  // cast uint8_t to GamePhase
+                        GamePhase newPhase = (GamePhase)received.phase;
+
+                        if (newPhase == GamePhase::GameOver && phase != GamePhase::GameOver) {
+                            phase = GamePhase::GameOver;
+                            ui.showGameOver("You caught him!\nPress R to restart");
+                        } else {
+                            phase = newPhase;
+                        }
+
                         if (phase == GamePhase::Countdown) {
                             uint8_t cd = received.countdown;
                             countdownText.setString(std::to_string(cd));
@@ -158,6 +183,7 @@ int main(int argc, char* argv[]) {
                     ui.updateTimer(elapsedTime);
                 }
 
+                // Collision — host decides, sends GameOver phase to joiner
                 if (me.alive && me.getBounds().findIntersection(them.getBounds())) {
                     if (isHost || isLocal) {
                         me.alive = false;
@@ -166,17 +192,14 @@ int main(int argc, char* argv[]) {
                                                 : "Game Over! Netanyahu got you!\nPress R to restart");
                     }
                 }
-                if (!isLocal && !isHost && !them.alive) {
-                    phase = GamePhase::GameOver;
-                    ui.showGameOver("You caught him!\nPress R to restart");
-                }
             }
 
-            // --- Network send ---
+            // --- Network send — always send in game world coords ---
             if (!isLocal) {
+                sf::Vector2f gamePos = toGame(me.getPosition());
                 uint8_t cd = (phase == GamePhase::Countdown)
                              ? (uint8_t)std::ceil(phaseTimer) : 0;
-                net.send({me.getPosition().x, me.getPosition().y,
+                net.send({gamePos.x, gamePos.y,
                           (uint8_t)me.alive, (uint8_t)phase, cd});
             }
 
