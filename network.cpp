@@ -30,7 +30,9 @@ Network::Network(bool isHost, bool isLocal, const std::string& serverIP)
 
 void Network::send(const GameState& state) {
     if (isLocal) return;
-    if (remoteAddr == sf::IpAddress::Any) return; // don't send until we know who to send to
+    if (remoteAddr == sf::IpAddress::Any) return;
+
+    std::cout << "Sending " << sizeof(GameState) << " bytes to relay" << std::endl;
 
     if (socket.send(&state, sizeof(GameState), remoteAddr, remotePort)
         != sf::Socket::Status::Done) {
@@ -45,10 +47,11 @@ bool Network::receive(GameState& out) {
     std::optional<sf::IpAddress> sender;
     unsigned short senderPort;
 
-    if (socket.receive(&out, sizeof(GameState), received, sender, senderPort)
-        == sf::Socket::Status::Done) {
-        return true; // don't update remoteAddr — always send back to relay
+    auto status = socket.receive(&out, sizeof(GameState), received, sender, senderPort);
+    
+    if (status == sf::Socket::Status::Done) {
+        std::cout << "Received " << received << " bytes, expected " << sizeof(GameState) << std::endl;
+        return true;
     }
-
     return false;
 }

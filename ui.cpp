@@ -66,9 +66,6 @@ void UI::draw(sf::RenderWindow& window, bool roundStarted, bool gameOver) {
 
     if (gameOver)
         window.draw(winText);
-
-    if (!roundStarted && !gameOver)
-        window.draw(startText);
 }
 
 sf::Text& UI::getStartText() {

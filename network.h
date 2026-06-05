@@ -4,18 +4,20 @@
 #include <string>
 
 enum class GamePhase : uint8_t {
-    Waiting,    // waiting for both players
-    Countdown,  // 3... 2... 1...
-    Playing,    // game running
+    Waiting,
+    Countdown,
+    Playing,
     GameOver
 };
 
+#pragma pack(push, 1)
 struct GameState {
-    float x, y;
-    bool      alive;
-    GamePhase phase;
-    uint8_t   countdown; // 3, 2, 1
+    float   x, y;
+    uint8_t alive;      // use uint8_t instead of bool
+    uint8_t phase;      // use uint8_t instead of GamePhase enum
+    uint8_t countdown;
 };
+#pragma pack(pop)
 
 class Network {
 public:

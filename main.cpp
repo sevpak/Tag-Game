@@ -31,8 +31,8 @@ int main(int argc, char* argv[]) {
         sf::Texture texture1("assets/hider.png");
         sf::Texture texture2("assets/seeker.png");
 
-        sf::Font  font("/System/Library/Fonts/Helvetica.ttc");
-        sf::Text  countdownText(font, "", 96);
+        sf::Font font("/System/Library/Fonts/Helvetica.ttc");
+        sf::Text countdownText(font, "", 96);
         countdownText.setFillColor(sf::Color::White);
 
         auto centerText = [&](sf::Text& t) {
@@ -47,10 +47,10 @@ int main(int argc, char* argv[]) {
         UI ui(W, H);
 
         sf::Clock clock;
-        float elapsedTime  = 0.f;
+        float     elapsedTime = 0.f;
         GamePhase phase       = GamePhase::Waiting;
         float     phaseTimer  = 0.f;
-        bool      peerReady   = false; 
+        bool      peerReady   = false;
 
         const float minX = BORDER, minY = BORDER;
         const float maxX = W - BORDER, maxY = H - BORDER;
@@ -62,18 +62,19 @@ int main(int argc, char* argv[]) {
             them.setPosition((isHost || isLocal) ? sf::Vector2f{maxX - them.getBounds().size.x,
                                                                maxY - them.getBounds().size.y}
                                                 : sf::Vector2f{minX, minY});
-            me.alive      = true;
-            them.alive    = true;
-            phase           = GamePhase::Waiting;
-            phaseTimer      = 0.f;
-            peerReady       = false;
-            elapsedTime   = 0.f;
+            me.alive    = true;
+            them.alive  = true;
+            phase       = GamePhase::Waiting;
+            phaseTimer  = 0.f;
+            peerReady   = false;
+            elapsedTime = 0.f;
             ui.resetTimer();
         };
 
         reset();
 
         sf::Vector2f theirTargetPos = them.getPosition();
+
         while (window.isOpen()) {
 
             // --- Network receive ---
@@ -81,18 +82,19 @@ int main(int argc, char* argv[]) {
                 GameState received{};
                 if (net.receive(received)) {
                     theirTargetPos = {received.x, received.y};
-                    them.alive     = received.alive;
+                    them.alive     = (bool)received.alive;  // cast uint8_t to bool
 
                     if (!isHost) {
-                        // joiner just follows host's phase
-                        phase           = received.phase;
-                        uint8_t cd      = received.countdown;
+                        phase = (GamePhase)received.phase;  // cast uint8_t to GamePhase
                         if (phase == GamePhase::Countdown) {
+                            uint8_t cd = received.countdown;
                             countdownText.setString(std::to_string(cd));
                             centerText(countdownText);
                         }
+                        if (phase == GamePhase::Playing) {
+                            countdownText.setString("");
+                        }
                     } else {
-                        // host just seeing a packet means peer is connected
                         peerReady = true;
                     }
                 }
@@ -129,7 +131,6 @@ int main(int argc, char* argv[]) {
                     countdownText.setString("3");
                     centerText(countdownText);
                 }
-
                 if (phase == GamePhase::Countdown) {
                     phaseTimer -= dt;
                     uint8_t cd = (uint8_t)std::ceil(phaseTimer);
@@ -173,9 +174,10 @@ int main(int argc, char* argv[]) {
 
             // --- Network send ---
             if (!isLocal) {
-                uint8_t cd = (phase == GamePhase::Countdown) 
-                            ? (uint8_t)std::ceil(phaseTimer) : 0;
-                net.send({me.getPosition().x, me.getPosition().y, me.alive, phase, cd});
+                uint8_t cd = (phase == GamePhase::Countdown)
+                             ? (uint8_t)std::ceil(phaseTimer) : 0;
+                net.send({me.getPosition().x, me.getPosition().y,
+                          (uint8_t)me.alive, (uint8_t)phase, cd});
             }
 
             // --- Draw ---
@@ -186,7 +188,7 @@ int main(int argc, char* argv[]) {
             ui.draw(window, phase == GamePhase::Playing, phase == GamePhase::GameOver);
 
             if (phase == GamePhase::Waiting)
-                window.draw(ui.getStartText()); // waiting for other player
+                window.draw(ui.getStartText());
             if (phase == GamePhase::Countdown)
                 window.draw(countdownText);
 
