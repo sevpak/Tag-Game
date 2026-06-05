@@ -56,7 +56,7 @@ cat > GamePackage/play.sh << 'EOF'
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-RELAY_IP="34.20.157.190"
+RELAY_IP="34.186.170.29"
 
 echo ""
 echo "================================"
