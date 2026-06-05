@@ -1,12 +1,18 @@
 #!/bin/bash
 set -e
 
+if [[ $(uname -m) == "arm64" ]]; then
+    BREW_PREFIX="/opt/homebrew"
+else
+    BREW_PREFIX="/usr/local"
+fi
+
 echo "Building game..."
 
 mkdir -p build
 cd build
 
-cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=$BREW_PREFIX
 make
 
 cd ..
@@ -23,12 +29,12 @@ cp -r assets/          GamePackage/assets/
 cp /System/Library/Fonts/Helvetica.ttc GamePackage/
 
 # Copy SFML dylibs
-cp /opt/homebrew/lib/libsfml-graphics.3.0.2.dylib  GamePackage/libs/
-cp /opt/homebrew/lib/libsfml-window.3.0.2.dylib    GamePackage/libs/
-cp /opt/homebrew/lib/libsfml-system.3.0.2.dylib    GamePackage/libs/
-cp /opt/homebrew/lib/libsfml-network.3.0.2.dylib   GamePackage/libs/
-cp /opt/homebrew/lib/libfreetype.6.dylib            GamePackage/libs/
-cp /opt/homebrew/lib/libpng16.16.dylib              GamePackage/libs/
+cp $BREW_PREFIX/lib/libsfml-graphics.3.0.2.dylib  GamePackage/libs/
+cp $BREW_PREFIX/lib/libsfml-window.3.0.2.dylib    GamePackage/libs/
+cp $BREW_PREFIX/lib/libsfml-system.3.0.2.dylib    GamePackage/libs/
+cp $BREW_PREFIX/lib/libsfml-network.3.0.2.dylib   GamePackage/libs/
+cp $BREW_PREFIX/lib/libfreetype.6.dylib            GamePackage/libs/
+cp $BREW_PREFIX/lib/libpng16.16.dylib              GamePackage/libs/
 
 # Tell the binary to look for libs in ./libs at runtime
 install_name_tool -add_rpath @executable_path/libs GamePackage/game
